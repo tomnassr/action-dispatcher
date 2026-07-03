@@ -4,10 +4,14 @@ import {
   analyzeTranscript,
   executeActions,
   getConnections,
+  pollZapierConnect,
+  searchZapierApps,
+  startZapierConnect,
   SAMPLE_TRANSCRIPT_TEXT,
   type ConnectedApp,
   type ExecutionResult,
   type ProposedAction,
+  type ZapierAppSummary,
 } from "@/lib/zapier-dispatch";
 
 export const Route = createFileRoute("/")({
@@ -27,8 +31,6 @@ function DispatchApp() {
 
   async function handleConnect() {
     setPhase("connecting");
-    // Fake the Zapier redirect round-trip
-    await new Promise((r) => setTimeout(r, 1400));
     const conns = await getConnections();
     setConnections(conns);
     setPhase("connected");
@@ -128,7 +130,7 @@ function StatusPill({ phase, count }: { phase: Phase; count: number }) {
     phase === "disconnected"
       ? "Not connected"
       : phase === "connecting"
-        ? "Connecting to Zapier"
+        ? "Loading connections"
         : phase === "processing"
           ? "Extracting actions"
           : `${count} apps connected`;
@@ -142,7 +144,74 @@ function StatusPill({ phase, count }: { phase: Phase; count: number }) {
 
 /* ─────────────────────── Phase: disconnected ─────────────────────── */
 
+const POPULAR_APP_SEARCHES = ["Gmail", "Slack", "HubSpot", "Google Calendar", "Notion"];
+
 function Disconnected({ onConnect }: { onConnect: () => void }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<ZapierAppSummary[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [connectingKey, setConnectingKey] = useState<string | null>(null);
+  const [connectedApps, setConnectedApps] = useState<ConnectedApp[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const cancelRef = useRef(false);
+
+  useEffect(() => {
+    const term = query.trim();
+    if (!term) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const handle = setTimeout(async () => {
+      try {
+        const found = await searchZapierApps(term);
+        setResults(found);
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  async function handleConnectApp(appKey: string) {
+    cancelRef.current = false;
+    setError(null);
+    setConnectingKey(appKey);
+    try {
+      const { url, startedAt } = await startZapierConnect(appKey);
+      // Real Zapier-hosted sign-in — the user authorizes with their own
+      // Zapier credentials in this new tab, not a fake local delay.
+      window.open(url, "_blank", "noopener,noreferrer");
+
+      const deadline = Date.now() + 5 * 60 * 1000;
+      let connected: ConnectedApp | null = null;
+      while (!connected && !cancelRef.current && Date.now() < deadline) {
+        connected = await pollZapierConnect(appKey, startedAt);
+      }
+
+      if (cancelRef.current) return;
+      if (!connected) {
+        setError(`Timed out waiting for ${appKey} to authorize. Try again.`);
+        return;
+      }
+      setConnectedApps((prev) => [...prev.filter((a) => a.id !== connected!.id), connected!]);
+      setQuery("");
+      setResults([]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong connecting that app.");
+    } finally {
+      setConnectingKey(null);
+    }
+  }
+
+  function handleCancelConnect() {
+    cancelRef.current = true;
+    setConnectingKey(null);
+  }
+
   return (
     <div className="mx-auto max-w-xl pt-16">
       <div className="rounded-md border border-border bg-card p-8 shadow-[0_1px_0_0_oklch(1_0_0_/_0.04)_inset]">
@@ -150,21 +219,110 @@ function Disconnected({ onConnect }: { onConnect: () => void }) {
           Step 1 / Connect
         </div>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">
-          Connect Zapier to run actions from a transcript.
+          Sign in with Zapier to connect your apps.
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          Paste a call or meeting transcript, then review a queue of concrete actions Dispatch can
-          run through your connected apps.
+          Search Zapier's full app catalog and authorize each one with your own Zapier account —
+          this isn't limited to a fixed set of integrations.
         </p>
-        <button
-          onClick={onConnect}
-          className="mt-6 inline-flex items-center gap-2 rounded-sm border border-border-strong bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:brightness-110"
-        >
-          Connect Zapier
-          <span aria-hidden>→</span>
-        </button>
-        <div className="mt-6 font-mono text-[11px] text-muted-foreground">
-          You'll be sent to Zapier to authorize, then returned here.
+
+        {connectedApps.length > 0 && (
+          <div className="mt-5 flex flex-wrap gap-2">
+            {connectedApps.map((a) => (
+              <span
+                key={a.id}
+                className="inline-flex items-center gap-1.5 rounded-sm border border-status-success/40 bg-status-success-bg px-2 py-1 font-mono text-[11px] text-status-success"
+              >
+                <AppGlyph id={a.id} />
+                {a.name}
+                <span aria-hidden>✓</span>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-6">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search for an app — Gmail, Slack, Notion, HubSpot…"
+            spellCheck={false}
+            className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-ring"
+          />
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {POPULAR_APP_SEARCHES.map((label) => (
+              <button
+                key={label}
+                onClick={() => setQuery(label)}
+                className="rounded-sm border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground transition hover:border-border-strong hover:text-foreground"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {searching && (
+          <div className="mt-3 font-mono text-[11px] text-muted-foreground">Searching…</div>
+        )}
+
+        {!searching && results.length > 0 && (
+          <ul className="mt-3 divide-y divide-border overflow-hidden rounded-sm border border-border">
+            {results.map((app) => {
+              const isConnected = connectedApps.some((a) => a.id === app.key);
+              const isConnecting = connectingKey === app.key;
+              return (
+                <li
+                  key={app.key}
+                  className="flex items-center justify-between gap-3 bg-surface px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <AppGlyph id={app.key} />
+                    <span className="text-sm">{app.title}</span>
+                  </div>
+                  {isConnected ? (
+                    <span className="font-mono text-[11px] text-status-success">Connected ✓</span>
+                  ) : isConnecting ? (
+                    <div className="flex items-center gap-2">
+                      <span className="animate-pulse font-mono text-[11px] text-muted-foreground">
+                        Waiting for authorization…
+                      </span>
+                      <button
+                        onClick={handleCancelConnect}
+                        className="font-mono text-[10px] uppercase text-muted-foreground hover:text-foreground"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleConnectApp(app.key)}
+                      disabled={connectingKey !== null}
+                      className="rounded-sm border border-border-strong bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Connect
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {error && <div className="mt-3 font-mono text-[11px] text-status-fail">{error}</div>}
+
+        <div className="mt-6 flex items-center justify-between gap-4">
+          <div className="font-mono text-[11px] text-muted-foreground">
+            Each app opens Zapier's own sign-in page in a new tab.
+          </div>
+          <button
+            onClick={onConnect}
+            disabled={connectedApps.length === 0}
+            className="inline-flex shrink-0 items-center gap-2 rounded-sm border border-border-strong bg-status-success px-4 py-2 text-sm font-medium text-status-success-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Continue
+            <span aria-hidden>→</span>
+          </button>
         </div>
       </div>
     </div>
@@ -174,42 +332,14 @@ function Disconnected({ onConnect }: { onConnect: () => void }) {
 /* ─────────────────────── Phase: connecting ─────────────────────── */
 
 function Connecting() {
-  const [step, setStep] = useState(0);
-  useEffect(() => {
-    const steps = [0, 1, 2];
-    let i = 0;
-    const t = setInterval(() => {
-      i = Math.min(i + 1, steps.length - 1);
-      setStep(i);
-    }, 450);
-    return () => clearInterval(t);
-  }, []);
-  const lines = ["Redirecting to Zapier…", "Authorizing Dispatch…", "Fetching connected apps…"];
   return (
     <div className="mx-auto max-w-xl pt-24 text-center">
       <div className="mx-auto grid h-14 w-14 place-items-center rounded-md border border-border bg-surface">
         <div className="h-3 w-3 animate-pulse rounded-full bg-status-review shadow-[0_0_20px_var(--status-review)]" />
       </div>
       <div className="mt-6 font-mono text-xs uppercase tracking-widest text-muted-foreground">
-        Handshake
+        Loading your connected apps…
       </div>
-      <ul className="mx-auto mt-4 w-fit space-y-1.5 text-left font-mono text-sm">
-        {lines.map((l, i) => (
-          <li
-            key={l}
-            className={
-              i < step
-                ? "text-status-success"
-                : i === step
-                  ? "text-foreground"
-                  : "text-muted-foreground/50"
-            }
-          >
-            {i < step ? "✓ " : i === step ? "▸ " : "  "}
-            {l}
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

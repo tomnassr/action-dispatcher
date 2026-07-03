@@ -184,11 +184,39 @@ function Disconnected({
   const [searching, setSearching] = useState(false);
   const [connectingKey, setConnectingKey] = useState<string | null>(null);
   const [connectedApps, setConnectedApps] = useState<ConnectedApp[]>([]);
+  const [checkingExisting, setCheckingExisting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pulsing, setPulsing] = useState(false);
   const cancelRef = useRef(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Apps already authenticated on this Zapier account (connected before this
+  // session, or via zapier.com directly) should show up automatically —
+  // the user shouldn't have to re-click "Connect" on something they've
+  // already authorized.
+  useEffect(() => {
+    let cancelled = false;
+    getConnections()
+      .then((apps) => {
+        if (!cancelled) setConnectedApps(apps);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(
+            e instanceof Error
+              ? `Couldn't check your Zapier account for existing connections: ${e.message}`
+              : "Couldn't check your Zapier account for existing connections.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingExisting(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Fired every time the "Sign in with Zapier" button in the top bar is
   // clicked, even though this card is already on screen — scroll it into
@@ -275,9 +303,17 @@ function Disconnected({
           Sign in with Zapier to connect your apps.
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          Search Zapier's full app catalog and authorize each one with your own Zapier account —
-          this isn't limited to a fixed set of integrations.
+          Anything already authorized on your Zapier account is picked up automatically. Search
+          Zapier's full app catalog below to authorize more — this isn't limited to a fixed set of
+          integrations.
         </p>
+
+        {checkingExisting && (
+          <div className="mt-4 flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-review" />
+            Checking your Zapier account for apps you've already connected…
+          </div>
+        )}
 
         {connectedApps.length > 0 && (
           <div className="mt-5 flex flex-wrap gap-2">

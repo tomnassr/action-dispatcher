@@ -78,12 +78,14 @@ npm run dev
 
 **4. Connect your apps**
 
-Open the app — the "Sign in with Zapier" screen lets you search Zapier's
-full catalog and connect any app right there. Clicking "Connect" opens
-Zapier's own authorization page in a new tab; the app polls in the
-background until you approve it, no CLI needed. Connect as many apps as you
-want, then hit "Continue." AI by Zapier itself needs no separate connection
-step — it's available on every Zapier account by default.
+Open the app — the "Sign in with Zapier" screen checks your Zapier account
+and automatically shows anything you've already authorized (through this
+app in a previous session, or directly on zapier.com) with no extra clicks.
+To authorize something new, search Zapier's full catalog and hit "Connect";
+that opens Zapier's own authorization page in a new tab and the app polls in
+the background until you approve it, no CLI needed. Connect as many apps as
+you want, then hit "Continue." AI by Zapier itself needs no separate
+connection step — it's available on every Zapier account by default.
 
 For a headless/CI setup instead (no browser to click through), use the
 setup script:

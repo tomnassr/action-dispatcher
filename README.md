@@ -11,6 +11,9 @@ Built for [ZapConnect 2026](https://sp-submissions-zapconnect-26.zapier.app/page
 [AI by Zapier](https://zapier.com/apps/ai/integrations), Zapier's built-in AI
 action — the only credential this app needs is your Zapier account.
 
+See [USER_STORIES.md](./USER_STORIES.md) for the product spec this was built
+against.
+
 ## How it works
 
 ```

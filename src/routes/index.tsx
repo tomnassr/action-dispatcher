@@ -72,7 +72,7 @@ function DispatchApp() {
             onAnalyze={handleAnalyze}
           />
         )}
-        {phase === "processing" && <Processing />}
+        {phase === "processing" && <Processing connections={connections} />}
         {phase === "review" && (
           <Review
             transcript={transcript}
@@ -290,7 +290,8 @@ function Connected({
 
 /* ─────────────────────── Phase: processing ─────────────────────── */
 
-function Processing() {
+function Processing({ connections }: { connections: ConnectedApp[] }) {
+  const appNames = connections.map((c) => c.name);
   return (
     <div className="mx-auto max-w-xl pt-24 text-center">
       <div className="mx-auto grid h-14 w-14 place-items-center rounded-md border border-border bg-surface">
@@ -300,7 +301,7 @@ function Processing() {
         Reading transcript against your live action catalog.
       </h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        Matching phrases to actions available on Gmail, Slack, HubSpot, and Google Calendar.
+        Matching phrases to actions available on {formatAppList(appNames)}.
       </p>
       <div className="mx-auto mt-8 max-w-md space-y-2 text-left font-mono text-[12px] text-muted-foreground">
         {[
@@ -661,28 +662,48 @@ function SectionLabel({ step, title }: { step: string; title: string }) {
   );
 }
 
+/** Deterministic hue per app key, so any connected app — not just a fixed
+ * roster — gets a distinct, stable badge color. */
+function hueFromAppId(id: string): number {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) % 360;
+  }
+  return hash;
+}
+
+function initialsFromAppId(id: string): string {
+  const words = id.split(/[-_\s]+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  return id.slice(0, 2).toUpperCase();
+}
+
 function AppGlyph({ id }: { id: string }) {
-  const map: Record<string, { label: string; bg: string; fg: string }> = {
-    gmail: { label: "GM", bg: "oklch(0.35 0.10 25)", fg: "oklch(0.92 0.02 25)" },
-    slack: { label: "SL", bg: "oklch(0.35 0.10 320)", fg: "oklch(0.92 0.02 320)" },
-    hubspot: { label: "HS", bg: "oklch(0.35 0.10 40)", fg: "oklch(0.92 0.02 40)" },
-    gcal: { label: "GC", bg: "oklch(0.35 0.10 240)", fg: "oklch(0.92 0.02 240)" },
-  };
-  const m = map[id] ?? {
-    label: id.slice(0, 2).toUpperCase(),
-    bg: "var(--surface-3)",
-    fg: "var(--foreground)",
-  };
+  const hue = hueFromAppId(id);
   return (
     <span
       className="grid h-5 w-5 place-items-center rounded-sm font-mono text-[9px] font-semibold"
-      style={{ background: m.bg, color: m.fg }}
+      style={{
+        background: `oklch(0.35 0.10 ${hue})`,
+        color: `oklch(0.92 0.02 ${hue})`,
+      }}
     >
-      {m.label}
+      {initialsFromAppId(id)}
     </span>
   );
 }
 
 function isActionComplete(a: ProposedAction): boolean {
   return a.params.every((p) => !p.required || p.value.trim().length > 0);
+}
+
+/** Joins app names into a natural-language list — works for any set of
+ * connected apps, not a fixed roster. */
+function formatAppList(names: string[]): string {
+  if (names.length === 0) return "your connected apps";
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
 }

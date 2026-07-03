@@ -84,7 +84,8 @@ npm run dev
 
 ## Embedding this logic in your own app
 
-The Zapier integration has no UI dependencies — it's two files:
+The reusable component is two files, and neither imports TanStack Start,
+React, or anything else specific to this demo:
 
 - **`src/lib/zapier-server.ts`** — the Zapier SDK singleton, connection
   persistence (`ZAPIER_CONNECTION_IDS`), and AI by Zapier discovery
@@ -92,18 +93,32 @@ The Zapier integration has no UI dependencies — it's two files:
   by Zapier — it's found at runtime via `zapier.listApps()` /
   `zapier.listActions()`, the same catalog lookup used for every other
   integration.
-- **`src/lib/zapier-dispatch.ts`** — the three functions above, plus the
-  shared types (`ConnectedApp`, `ProposedAction`, `ActionParam`,
-  `ExecutionResult`).
+- **`src/lib/action-dispatcher.ts`** — `getConnections()`,
+  `analyzeTranscript(transcript)`, and `executeActions(actions)` as plain
+  `async` functions, plus the shared types (`ConnectedApp`, `ProposedAction`,
+  `ActionParam`, `ExecutionResult`). Each call reads `ZAPIER_CREDENTIALS` /
+  `ZAPIER_CONNECTION_IDS` from `process.env` at call time — nothing is baked
+  in at build time, so whoever's environment it runs in is whose Zapier
+  account it uses.
 
-The only framework-specific part is the `createServerFn(...)` wrapper around
-each function body (from [TanStack Start](https://tanstack.com/start)) —
-everything inside each `.handler()` is plain `@zapier/zapier-sdk` calls with
-no dependency on TanStack, React, or this app's UI. To reuse this in another
-backend: copy both files, swap `createServerFn` for your framework's
-equivalent (an Express route, a Next.js route handler, a plain function —
-whatever fits), and call `getConnections()` / `analyzeTranscript()` /
-`executeActions()` directly.
+**To embed this in another backend:** copy both files into your project,
+`npm install @zapier/zapier-sdk zod`, and call the three functions directly —
+there's no framework wrapper to strip out. For example, in a plain Express
+route:
+
+```ts
+import { analyzeTranscript } from "./action-dispatcher";
+
+app.post("/analyze", async (req, res) => {
+  res.json(await analyzeTranscript(req.body.transcript));
+});
+```
+
+`src/lib/zapier-dispatch.ts` is the one framework-specific file — a ~50-line
+adapter that wraps each `action-dispatcher.ts` function in TanStack Start's
+`createServerFn(...)` so it can be called from client components without
+shipping `@zapier/zapier-sdk` to the browser. If you're not using TanStack
+Start, you don't need this file at all.
 
 ## A note on persistence
 

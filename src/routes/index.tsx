@@ -8,19 +8,13 @@ import {
   type ConnectedApp,
   type ExecutionResult,
   type ProposedAction,
-} from "@/lib/dispatch-mock";
+} from "@/lib/zapier-dispatch";
 
 export const Route = createFileRoute("/")({
   component: DispatchApp,
 });
 
-type Phase =
-  | "disconnected"
-  | "connecting"
-  | "connected"
-  | "processing"
-  | "review"
-  | "executed";
+type Phase = "disconnected" | "connecting" | "connected" | "processing" | "review" | "executed";
 
 function DispatchApp() {
   const [phase, setPhase] = useState<Phase>("disconnected");
@@ -44,9 +38,7 @@ function DispatchApp() {
     setPhase("processing");
     const proposed = await analyzeTranscript(transcript);
     setActions(proposed);
-    setIncluded(
-      Object.fromEntries(proposed.map((a) => [a.id, isActionComplete(a)])),
-    );
+    setIncluded(Object.fromEntries(proposed.map((a) => [a.id, isActionComplete(a)])));
     setPhase("review");
   }
 
@@ -95,11 +87,7 @@ function DispatchApp() {
           />
         )}
         {phase === "executed" && (
-          <Executed
-            actions={actions}
-            results={results}
-            onReset={resetToConnected}
-          />
+          <Executed actions={actions} results={results} onReset={resetToConnected} />
         )}
       </main>
     </div>
@@ -165,8 +153,8 @@ function Disconnected({ onConnect }: { onConnect: () => void }) {
           Connect Zapier to run actions from a transcript.
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          Paste a call or meeting transcript, then review a queue of concrete
-          actions Dispatch can run through your connected apps.
+          Paste a call or meeting transcript, then review a queue of concrete actions Dispatch can
+          run through your connected apps.
         </p>
         <button
           onClick={onConnect}
@@ -196,11 +184,7 @@ function Connecting() {
     }, 450);
     return () => clearInterval(t);
   }, []);
-  const lines = [
-    "Redirecting to Zapier…",
-    "Authorizing Dispatch…",
-    "Fetching connected apps…",
-  ];
+  const lines = ["Redirecting to Zapier…", "Authorizing Dispatch…", "Fetching connected apps…"];
   return (
     <div className="mx-auto max-w-xl pt-24 text-center">
       <div className="mx-auto grid h-14 w-14 place-items-center rounded-md border border-border bg-surface">
@@ -253,10 +237,7 @@ function Connected({
         <SectionLabel step="Step 2" title="Live connections" />
         <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
           {connections.map((c) => (
-            <div
-              key={c.id}
-              className="rounded-sm border border-border bg-card p-3"
-            >
+            <div key={c.id} className="rounded-sm border border-border bg-card p-3">
               <div className="flex items-center gap-2">
                 <AppGlyph id={c.id} />
                 <span className="text-sm font-medium">{c.name}</span>
@@ -276,9 +257,7 @@ function Connected({
             <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
               transcript.txt
             </span>
-            <span className="font-mono text-[10px] text-muted-foreground">
-              {wordCount} words
-            </span>
+            <span className="font-mono text-[10px] text-muted-foreground">{wordCount} words</span>
           </div>
           <textarea
             value={transcript}
@@ -317,7 +296,9 @@ function Processing() {
       <div className="mx-auto grid h-14 w-14 place-items-center rounded-md border border-border bg-surface">
         <div className="h-3 w-3 animate-pulse rounded-full bg-status-review shadow-[0_0_20px_var(--status-review)]" />
       </div>
-      <h2 className="mt-6 text-lg font-semibold">Reading transcript against your live action catalog.</h2>
+      <h2 className="mt-6 text-lg font-semibold">
+        Reading transcript against your live action catalog.
+      </h2>
       <p className="mt-2 text-sm text-muted-foreground">
         Matching phrases to actions available on Gmail, Slack, HubSpot, and Google Calendar.
       </p>
@@ -360,13 +341,10 @@ function Review({
   onRun: () => void;
   onBack: () => void;
 }) {
-  const activeQuote =
-    actions.find((a) => a.id === activeActionId)?.sourceQuote ?? null;
+  const activeQuote = actions.find((a) => a.id === activeActionId)?.sourceQuote ?? null;
 
   const queuedCount = actions.filter((a) => included[a.id]).length;
-  const anyBlocked = actions.some(
-    (a) => included[a.id] && !isActionComplete(a),
-  );
+  const anyBlocked = actions.some((a) => included[a.id] && !isActionComplete(a));
 
   function updateParam(actionId: string, key: string, value: string) {
     setActions(
@@ -435,9 +413,7 @@ function Review({
                   <input
                     type="checkbox"
                     checked={!!included[a.id]}
-                    onChange={(e) =>
-                      setIncluded({ ...included, [a.id]: e.target.checked })
-                    }
+                    onChange={(e) => setIncluded({ ...included, [a.id]: e.target.checked })}
                     className="mt-1 h-4 w-4 accent-status-success"
                     aria-label={`Include ${a.actionType}`}
                   />
@@ -453,9 +429,7 @@ function Review({
                         </span>
                       )}
                     </div>
-                    <div className="mt-1.5 text-sm text-foreground">
-                      {a.summary}
-                    </div>
+                    <div className="mt-1.5 text-sm text-foreground">{a.summary}</div>
                   </div>
                 </div>
                 <div className="grid gap-2 px-4 py-3">
@@ -465,9 +439,7 @@ function Review({
                       <div key={p.key} className="grid grid-cols-[110px_1fr] items-start gap-3">
                         <label className="pt-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                           {p.label}
-                          {p.required && (
-                            <span className="text-status-fail"> *</span>
-                          )}
+                          {p.required && <span className="text-status-fail"> *</span>}
                         </label>
                         {p.multiline ? (
                           <textarea
@@ -554,8 +526,7 @@ function TranscriptView({
         } else {
           if (idx > 0) next.push({ text: s.text.slice(0, idx) });
           next.push({ text: q, quote: q });
-          if (idx + q.length < s.text.length)
-            next.push({ text: s.text.slice(idx + q.length) });
+          if (idx + q.length < s.text.length) next.push({ text: s.text.slice(idx + q.length) });
         }
       }
       segs = next;
@@ -616,7 +587,10 @@ function Executed({
   return (
     <div>
       <div className="flex items-end justify-between">
-        <SectionLabel step="Done" title={`Ran ${results.length} action${results.length === 1 ? "" : "s"}`} />
+        <SectionLabel
+          step="Done"
+          title={`Ran ${results.length} action${results.length === 1 ? "" : "s"}`}
+        />
         <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider">
           <span className="text-status-success">{succeeded} succeeded</span>
           {failed > 0 && <span className="text-status-fail">{failed} failed</span>}
@@ -652,9 +626,7 @@ function Executed({
                   </span>
                 </div>
                 <div className="mt-1 text-sm">{a.summary}</div>
-                <div className="mt-1 font-mono text-[11px] text-muted-foreground">
-                  {r.message}
-                </div>
+                <div className="mt-1 font-mono text-[11px] text-muted-foreground">{r.message}</div>
               </div>
             </li>
           );
@@ -696,7 +668,11 @@ function AppGlyph({ id }: { id: string }) {
     hubspot: { label: "HS", bg: "oklch(0.35 0.10 40)", fg: "oklch(0.92 0.02 40)" },
     gcal: { label: "GC", bg: "oklch(0.35 0.10 240)", fg: "oklch(0.92 0.02 240)" },
   };
-  const m = map[id] ?? { label: id.slice(0, 2).toUpperCase(), bg: "var(--surface-3)", fg: "var(--foreground)" };
+  const m = map[id] ?? {
+    label: id.slice(0, 2).toUpperCase(),
+    bg: "var(--surface-3)",
+    fg: "var(--foreground)",
+  };
   return (
     <span
       className="grid h-5 w-5 place-items-center rounded-sm font-mono text-[9px] font-semibold"

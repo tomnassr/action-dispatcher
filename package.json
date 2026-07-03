@@ -1,5 +1,11 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "action-dispatcher",
+  "description": "Turn a call transcript into a reviewable queue of actions across your connected apps, powered by AI by Zapier — no separate AI provider key required.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tomnassr/action-dispatcher.git"
+  },
   "private": true,
   "sideEffects": false,
   "type": "module",

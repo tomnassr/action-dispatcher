@@ -92,12 +92,8 @@
     "typescript-eslint": "^8.56.1",
     "vite": "^8.0.16"
   },
-  "overrides": {
-    "@zapier/policy-context": {
-      "zod": "^4.0.0"
-    },
-    "@zapier/policy-schema": {
-      "zod": "^4.0.0"
-    }
+  "resolutions": {
+    "@zapier/policy-context/zod": "^4.0.0",
+    "@zapier/policy-schema/zod": "^4.0.0"
   }
 }

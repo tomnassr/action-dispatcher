@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   analyzeTranscript,
   executeActions,
@@ -28,7 +28,7 @@ function DispatchApp() {
   const [included, setIncluded] = useState<Record<string, boolean>>({});
   const [results, setResults] = useState<ExecutionResult[]>([]);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
-  const appSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [signInPulse, setSignInPulse] = useState(0);
 
   async function handleConnect() {
     setPhase("connecting");
@@ -66,11 +66,11 @@ function DispatchApp() {
       <TopBar
         phase={phase}
         connections={connections}
-        onSignInClick={() => appSearchInputRef.current?.focus()}
+        onSignInClick={() => setSignInPulse((n) => n + 1)}
       />
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-10">
         {phase === "disconnected" && (
-          <Disconnected onConnect={handleConnect} searchInputRef={appSearchInputRef} />
+          <Disconnected onConnect={handleConnect} attentionSignal={signInPulse} />
         )}
         {phase === "connecting" && <Connecting />}
         {phase === "connected" && (
@@ -174,10 +174,10 @@ const POPULAR_APP_SEARCHES = ["Gmail", "Slack", "HubSpot", "Google Calendar", "N
 
 function Disconnected({
   onConnect,
-  searchInputRef,
+  attentionSignal,
 }: {
   onConnect: () => void;
-  searchInputRef: RefObject<HTMLInputElement | null>;
+  attentionSignal: number;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ZapierAppSummary[]>([]);
@@ -185,7 +185,23 @@ function Disconnected({
   const [connectingKey, setConnectingKey] = useState<string | null>(null);
   const [connectedApps, setConnectedApps] = useState<ConnectedApp[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [pulsing, setPulsing] = useState(false);
   const cancelRef = useRef(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Fired every time the "Sign in with Zapier" button in the top bar is
+  // clicked, even though this card is already on screen — scroll it into
+  // view, focus the search box, and flash a highlight so the click is
+  // never a silent no-op.
+  useEffect(() => {
+    if (attentionSignal === 0) return;
+    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    searchInputRef.current?.focus();
+    setPulsing(true);
+    const timer = setTimeout(() => setPulsing(false), 900);
+    return () => clearTimeout(timer);
+  }, [attentionSignal]);
 
   useEffect(() => {
     const term = query.trim();
@@ -246,7 +262,12 @@ function Disconnected({
 
   return (
     <div className="mx-auto max-w-xl pt-16">
-      <div className="rounded-md border border-border bg-card p-8 shadow-[0_1px_0_0_oklch(1_0_0_/_0.04)_inset]">
+      <div
+        ref={cardRef}
+        className={`rounded-md border border-border bg-card p-8 shadow-[0_1px_0_0_oklch(1_0_0_/_0.04)_inset] transition-shadow duration-300 ${
+          pulsing ? "!border-status-review shadow-[0_0_0_3px_var(--status-review)]" : ""
+        }`}
+      >
         <div className="font-mono text-[11px] uppercase tracking-widest text-status-review">
           Step 1 / Connect
         </div>

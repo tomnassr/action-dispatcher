@@ -1,0 +1,14 @@
+# Copy this file to .dev.vars for local development (.dev.vars is gitignored).
+# For production, set the same two values as Worker secrets/vars on your host
+# instead — the app has no writable filesystem at runtime to persist them itself.
+
+# Zapier API token. Easiest path: run `npx zapier-sdk login` instead of setting
+# this for local dev — the SDK reads the resulting ~/.zapier-sdk/config.json
+# automatically with no env var needed. Set this explicitly for CI/production.
+ZAPIER_CREDENTIALS=
+
+# JSON map of appKey -> connectionId, e.g. {"gmail":"12345","slack":"67890"}.
+# Printed by `npm run zapier:connect <appKey> [<appKey> ...]` after you
+# authorize each app. Optional — if unset, the app falls back to the most
+# recently created connection per app.
+ZAPIER_CONNECTION_IDS=

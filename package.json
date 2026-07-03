@@ -1,5 +1,11 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "action-dispatcher",
+  "description": "Turn a call transcript into a reviewable queue of actions across your connected apps, powered by AI by Zapier — no separate AI provider key required.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tomnassr/action-dispatcher.git"
+  },
   "private": true,
   "sideEffects": false,
   "type": "module",
@@ -9,7 +15,8 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "zapier:connect": "node scripts/zapier-connect.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -44,6 +51,7 @@
     "@tanstack/react-router": "^1.170.16",
     "@tanstack/react-start": "^1.168.26",
     "@tanstack/router-plugin": "^1.168.18",
+    "@zapier/zapier-sdk": "^0.81.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

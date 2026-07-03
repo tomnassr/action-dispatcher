@@ -30,13 +30,22 @@ transcript ──▶ analyzeTranscript() ──▶ review queue ──▶ execut
                                                     zapier.apps[app][type][action]()
 ```
 
-Three functions are the entire backend contract:
+The core three functions:
 
 | Function | What it does |
 | --- | --- |
 | `getConnections()` | Lists your live Zapier connections, enriched with app metadata (category, action count). |
 | `analyzeTranscript(transcript)` | Scopes the Zapier action catalog to your connected apps, asks AI by Zapier to match transcript phrases to catalog actions, verifies every quote is real and every required input is present, and returns the validated list. |
 | `executeActions(actions)` | Runs only the actions you pass in — one Zapier action call each — and returns a success/failure result per action. Nothing runs unless you explicitly pass it here. |
+
+Plus three more that drive the in-app "connect" screen — a real Zapier
+sign-in, not a mock:
+
+| Function | What it does |
+| --- | --- |
+| `searchZapierApps(query)` | Searches Zapier's full app catalog (`zapier.listApps`) — any of Zapier's ~9,000 integrations, not a fixed list. |
+| `startZapierConnect(appKey)` | Generates a Zapier-hosted authorization URL for one app (`zapier.getConnectionStartUrl`). |
+| `pollZapierConnect(appKey, startedAt)` | Checks whether that authorization has completed yet (`zapier.waitForNewConnection`, short-timeout so it's safe to call repeatedly from the browser). |
 
 ## Quickstart
 
@@ -61,29 +70,34 @@ This opens a browser, authorizes, and stores a token at
 needed locally. For CI/production, set `ZAPIER_CREDENTIALS` explicitly (see
 `.dev.vars.example`).
 
-**3. Connect the apps you want to use**
+**3. Run it**
+
+```sh
+npm run dev
+```
+
+**4. Connect your apps**
+
+Open the app — the "Sign in with Zapier" screen lets you search Zapier's
+full catalog and connect any app right there. Clicking "Connect" opens
+Zapier's own authorization page in a new tab; the app polls in the
+background until you approve it, no CLI needed. Connect as many apps as you
+want, then hit "Continue." AI by Zapier itself needs no separate connection
+step — it's available on every Zapier account by default.
+
+For a headless/CI setup instead (no browser to click through), use the
+setup script:
 
 ```sh
 npm run zapier:connect gmail slack hubspot google-calendar
 ```
 
-Replace those with whatever apps you actually want — the app is not
-hardcoded to any specific set. This opens a Zapier-hosted authorization URL
-per app and, once you approve it, prints:
-
-```
-ZAPIER_CONNECTION_IDS='{"gmail":"...","slack":"..."}'
-```
-
-Copy that into `.dev.vars` (copy `.dev.vars.example` as a starting point).
-AI by Zapier itself needs no separate connection step — it's available on
-every Zapier account by default.
-
-**4. Run it**
-
-```sh
-npm run dev
-```
+Replace those with whatever apps you actually want. This prints
+`ZAPIER_CONNECTION_IDS='{"gmail":"...","slack":"..."}'` to paste into
+`.dev.vars` — useful for a production deploy where nobody's clicking through
+the UI. If both are set, `ZAPIER_CONNECTION_IDS` pins which connection to use
+per app; anything you connect through the UI beyond that is picked up
+automatically.
 
 ## Embedding this logic in your own app
 

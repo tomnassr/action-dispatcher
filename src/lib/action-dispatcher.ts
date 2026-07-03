@@ -94,6 +94,65 @@ export async function getConnections(): Promise<ConnectedApp[]> {
   );
 }
 
+/* ─────────────────────── interactive connect flow ─────────────────────── */
+//
+// getConnections() only reads what's already connected. These three
+// functions let a user connect a *new* app from inside the running app —
+// Zapier's own hosted sign-in page, not a fake local delay — so a live demo
+// can show someone authorizing with their own Zapier credentials. Nothing
+// here is scoped to a fixed app list: search hits Zapier's full catalog.
+
+export type ZapierAppSummary = {
+  key: string;
+  title: string;
+};
+
+/** Searches Zapier's full app catalog — not a fixed roster — so a user can
+ * connect any of Zapier's ~9,000 integrations, not just a curated few. */
+export async function searchZapierApps(query: string): Promise<ZapierAppSummary[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const zapier = getZapierSdk();
+  const { data: apps } = await zapier.listApps({ search: q, maxItems: 15 });
+  return apps
+    .filter((app) => !app.is_hidden)
+    .map((app) => ({ key: app.slug ?? app.key, title: app.title }));
+}
+
+export type ZapierConnectStart = {
+  appKey: string;
+  url: string;
+  startedAt: number;
+};
+
+/** Generates the Zapier-hosted authorization link for one app. The caller
+ * opens `url` for the user to sign in and approve on Zapier's own page. */
+export async function startZapierConnect(appKey: string): Promise<ZapierConnectStart> {
+  const zapier = getZapierSdk();
+  const { data } = await zapier.getConnectionStartUrl({ app: appKey });
+  return { appKey, url: data.url, startedAt: data.startedAt };
+}
+
+/**
+ * Checks whether the app the user was sent to authorize has connected yet.
+ * Uses a short internal timeout so a single call can't hang a request for
+ * minutes — the caller (the browser) re-calls this every few seconds until
+ * it gets a non-null result or the user gives up.
+ */
+export async function pollZapierConnect(
+  appKey: string,
+  startedAt: number,
+): Promise<ConnectedApp | null> {
+  const zapier = getZapierSdk();
+  try {
+    await zapier.waitForNewConnection({ app: appKey, startedAt, timeoutMs: 4000 });
+  } catch {
+    return null; // not connected yet this round — caller will poll again
+  }
+  const all = await getConnections();
+  return all.find((c) => c.id === appKey) ?? null;
+}
+
 /* ─────────────────────── analyzeTranscript ─────────────────────── */
 
 const ExtractionSchema = z.object({

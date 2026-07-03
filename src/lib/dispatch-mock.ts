@@ -1,17 +1,14 @@
-// Backed by real Zapier + Claude calls (see zapier-server.ts for the Zapier
-// SDK singleton and connection persistence notes). Types below are the
-// shared contract with the UI — keep them stable.
+// Backed by real Zapier calls, including transcript analysis via the
+// built-in "AI by Zapier" action (see zapier-server.ts for the Zapier SDK
+// singleton, connection persistence notes, and AI-action discovery). Types
+// below are the shared contract with the UI — keep them stable.
 
 import { createServerFn } from "@tanstack/react-start";
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-// The structured-output helper converts the schema via zod's v4 JSON-schema
-// exporter, which can't read a schema built with the project's top-level
-// (v3) "zod" import — this subpath is zod's own v4 compatibility build.
-import { z } from "zod/v4";
+import { z } from "zod";
 import {
   getZapierSdk,
   resolveConnectionMap,
+  runAiByZapierPrompt,
   type ZapierActionType,
   type ZapierSdkInstance,
 } from "@/lib/zapier-server";
@@ -166,7 +163,7 @@ async function buildActionCatalog(
   return catalog;
 }
 
-function buildSystemPrompt(catalog: CatalogEntry[]): string {
+function buildExtractionPrompt(catalog: CatalogEntry[], transcript: string): string {
   const catalogForPrompt = catalog.map((c) => ({
     ref: c.ref,
     app: c.appName,
@@ -184,7 +181,14 @@ Rules:
 - "params" should cover the input fields a person would need to fill in to run the action (recipient, subject, body, channel, message, date, etc.), inferred from context. Use "" for a value you can't determine from the transcript.
 - "confidence" is a 0-1 score reflecting how clearly the transcript supports the action.
 - Don't propose duplicate actions for the same thing.
-- It's fine to return zero actions if nothing in the transcript warrants one.`;
+- It's fine to return zero actions if nothing in the transcript warrants one.
+
+TRANSCRIPT:
+"""
+${transcript}
+"""
+
+Respond with ONLY a JSON object of the exact shape {"actions": [{"ref": "...", "summary": "...", "sourceQuote": "...", "confidence": 0.0, "params": [{"key": "...", "label": "...", "value": "..."}]}]}. No prose, no markdown code fences, nothing before or after the JSON.`;
 }
 
 /** Encodes the Zapier routing info needed to later execute this action into
@@ -222,19 +226,29 @@ const analyzeTranscriptFn = createServerFn({ method: "POST" })
     if (catalog.length === 0) return [];
     const catalogByRef = new Map(catalog.map((c) => [c.ref, c]));
 
-    const anthropic = new Anthropic();
-    const response = await anthropic.messages.parse({
-      model: "claude-opus-4-8",
-      max_tokens: 8192,
-      system: buildSystemPrompt(catalog),
-      messages: [{ role: "user", content: transcript }],
-      output_config: { format: zodOutputFormat(ExtractionSchema) },
-    });
+    const rawOutput = await runAiByZapierPrompt(zapier, buildExtractionPrompt(catalog, transcript));
 
-    const proposals = response.parsed_output?.actions ?? [];
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(rawOutput);
+    } catch {
+      const match = rawOutput.match(/[[{][\s\S]*[\]}]/);
+      if (!match) {
+        throw new Error(`AI by Zapier did not return parseable JSON: ${rawOutput.slice(0, 200)}`);
+      }
+      parsedJson = JSON.parse(match[0]);
+    }
+
+    const extraction = ExtractionSchema.safeParse(parsedJson);
+    if (!extraction.success) {
+      throw new Error(
+        `AI by Zapier's response didn't match the expected shape: ${extraction.error.message}`,
+      );
+    }
+
     const validated: ProposedAction[] = [];
 
-    for (const proposal of proposals) {
+    for (const proposal of extraction.data.actions) {
       const entry = catalogByRef.get(proposal.ref);
       if (!entry) continue; // not a real catalog action — drop
       if (!transcript.includes(proposal.sourceQuote)) continue; // quote must be real — drop

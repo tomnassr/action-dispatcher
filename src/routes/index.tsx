@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   analyzeTranscript,
   executeActions,
@@ -28,6 +28,7 @@ function DispatchApp() {
   const [included, setIncluded] = useState<Record<string, boolean>>({});
   const [results, setResults] = useState<ExecutionResult[]>([]);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
+  const appSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   async function handleConnect() {
     setPhase("connecting");
@@ -62,9 +63,15 @@ function DispatchApp() {
 
   return (
     <div className="min-h-screen grid-bg">
-      <TopBar phase={phase} connections={connections} />
+      <TopBar
+        phase={phase}
+        connections={connections}
+        onSignInClick={() => appSearchInputRef.current?.focus()}
+      />
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-10">
-        {phase === "disconnected" && <Disconnected onConnect={handleConnect} />}
+        {phase === "disconnected" && (
+          <Disconnected onConnect={handleConnect} searchInputRef={appSearchInputRef} />
+        )}
         {phase === "connecting" && <Connecting />}
         {phase === "connected" && (
           <Connected
@@ -98,7 +105,15 @@ function DispatchApp() {
 
 /* ─────────────────────── Chrome ─────────────────────── */
 
-function TopBar({ phase, connections }: { phase: Phase; connections: ConnectedApp[] }) {
+function TopBar({
+  phase,
+  connections,
+  onSignInClick,
+}: {
+  phase: Phase;
+  connections: ConnectedApp[];
+  onSignInClick: () => void;
+}) {
   return (
     <header className="border-b border-border bg-surface/60 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
@@ -113,7 +128,18 @@ function TopBar({ phase, connections }: { phase: Phase; connections: ConnectedAp
             </span>
           </div>
         </div>
-        <StatusPill phase={phase} count={connections.length} />
+        <div className="flex items-center gap-2">
+          {phase === "disconnected" && (
+            <button
+              onClick={onSignInClick}
+              className="inline-flex items-center gap-1.5 rounded-sm border border-border-strong bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition hover:brightness-110"
+            >
+              Sign in with Zapier
+              <span aria-hidden>→</span>
+            </button>
+          )}
+          <StatusPill phase={phase} count={connections.length} />
+        </div>
       </div>
     </header>
   );
@@ -146,7 +172,13 @@ function StatusPill({ phase, count }: { phase: Phase; count: number }) {
 
 const POPULAR_APP_SEARCHES = ["Gmail", "Slack", "HubSpot", "Google Calendar", "Notion"];
 
-function Disconnected({ onConnect }: { onConnect: () => void }) {
+function Disconnected({
+  onConnect,
+  searchInputRef,
+}: {
+  onConnect: () => void;
+  searchInputRef: RefObject<HTMLInputElement | null>;
+}) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ZapierAppSummary[]>([]);
   const [searching, setSearching] = useState(false);
@@ -243,6 +275,7 @@ function Disconnected({ onConnect }: { onConnect: () => void }) {
 
         <div className="mt-6">
           <input
+            ref={searchInputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search for an app — Gmail, Slack, Notion, HubSpot…"

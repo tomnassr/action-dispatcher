@@ -14,6 +14,9 @@
 //   ZAPIER_CREDENTIALS        Zapier API token (read automatically by the SDK)
 //   ZAPIER_CONNECTION_IDS     Optional JSON map of appKey -> connectionId,
 //                             e.g. {"gmail":"12345"} — printed by the setup script.
+//   ZAPIER_AI_MODEL           Optional AI by Zapier model id for transcript
+//                             analysis. Defaults to a free, plan-included
+//                             Gemini model (see DEFAULT_AI_MODEL below).
 //
 // The transcript analysis itself runs through the built-in "AI by Zapier"
 // action (native OpenAI/Anthropic/Gemini access) instead of a direct model
@@ -21,6 +24,22 @@
 // hardcoded action: it's discovered at runtime via the same app/action
 // catalog every other integration uses, since the SDK has no special case
 // for it.
+//
+// Model note: by default we pin a Zapier-included ("free") Gemini model so
+// the completion runs on Zapier's built-in credentials and only consumes a
+// Zapier task — no separate AI provider account or connection needed. Left
+// unpinned, the action defaults to "advanced/auto", which can resolve to a
+// model that requires a connected provider account and then fails with
+// "Connection is required". Override the default with ZAPIER_AI_MODEL.
+
+// Zapier-included Gemini model — reported with includedInPlan: true by
+// AI by Zapier's list_models action, so it runs on built-in credentials
+// (only a Zapier task is consumed) and needs no provider connection.
+const DEFAULT_AI_MODEL = "google/gemini-2.5-flash";
+
+function getAiModelId(): string {
+  return process.env.ZAPIER_AI_MODEL?.trim() || DEFAULT_AI_MODEL;
+}
 
 import { createZapierSdk, type ZapierSdk } from "@zapier/zapier-sdk";
 
@@ -76,7 +95,10 @@ type AiByZapierAction = {
   actionType: ZapierActionType;
   actionKey: string;
   promptFieldKey: string;
-  needsConnection: boolean;
+  // Input-field key that selects the model (e.g. "model_id"), when the action
+  // exposes one. We pin a free model on it so completions run on Zapier's
+  // built-in credentials. Undefined if the action has no such field.
+  modelFieldKey: string | undefined;
 };
 
 let aiAction: Promise<AiByZapierAction> | null = null;
@@ -107,6 +129,7 @@ async function discoverAiByZapierAction(zapier: ZapierSdk): Promise<AiByZapierAc
   }
 
   let promptFieldKey = "prompt";
+  let modelFieldKey: string | undefined;
   try {
     const { data: schema } = await zapier.getActionInputFieldsSchema({
       appKey,
@@ -115,13 +138,20 @@ async function discoverAiByZapierAction(zapier: ZapierSdk): Promise<AiByZapierAc
     });
     const properties =
       (schema?.properties as Record<string, { title?: string; description?: string }>) ?? {};
-    const match = Object.entries(properties).find(([key, field]) => {
+    const promptMatch = Object.entries(properties).find(([key, field]) => {
       const haystack = `${key} ${field?.title ?? ""} ${field?.description ?? ""}`.toLowerCase();
       return haystack.includes("prompt") || haystack.includes("instructions");
     });
-    if (match) promptFieldKey = match[0];
+    if (promptMatch) promptFieldKey = promptMatch[0];
+
+    // Prefer the exact conventional key, else any field that looks like a
+    // model selector — so we can pin a free model on it below.
+    modelFieldKey =
+      ("model_id" in properties ? "model_id" : undefined) ??
+      Object.keys(properties).find((key) => /(^|_)model(_|$|id)/i.test(key));
   } catch {
-    // Fall back to the conventional "prompt" key below.
+    // Fall back to the conventional keys below.
+    modelFieldKey = "model_id";
   }
 
   return {
@@ -129,7 +159,7 @@ async function discoverAiByZapierAction(zapier: ZapierSdk): Promise<AiByZapierAc
     actionType: action.action_type,
     actionKey: action.key,
     promptFieldKey,
-    needsConnection: Boolean(app.auth_type),
+    modelFieldKey,
   };
 }
 
@@ -147,20 +177,24 @@ function getAiByZapierAction(zapier: ZapierSdk): Promise<AiByZapierAction> {
 export async function runAiByZapierPrompt(zapier: ZapierSdk, prompt: string): Promise<string> {
   const action = await getAiByZapierAction(zapier);
 
-  let connection: string | number | undefined;
-  if (action.needsConnection) {
-    const map = await resolveConnectionMap(zapier);
-    connection = map[action.appKey];
-    if (connection === undefined) {
-      throw new Error(
-        `"AI by Zapier" needs a connection but none is configured. Run "npm run zapier:connect ${action.appKey}".`,
-      );
-    }
+  const inputs: Record<string, unknown> = { [action.promptFieldKey]: prompt };
+  // Pin a free (plan-included) model so the completion runs on Zapier's
+  // built-in credentials with no provider connection. Without this the action
+  // falls back to "advanced/auto", which can pick a model that needs a
+  // connected provider account and then fails with "Connection is required".
+  if (action.modelFieldKey) {
+    inputs[action.modelFieldKey] = getAiModelId();
   }
 
-  const result = await zapier.apps[action.appKey][action.actionType][action.actionKey]({
-    connection,
-    inputs: { [action.promptFieldKey]: prompt },
+  // Use runAction (the direct RPC), NOT the zapier.apps[...] proxy: the proxy
+  // enforces a connection binding and throws "Connection is required" for the
+  // built-in AI app, which has no user connection. runAction has no such
+  // requirement, so the free-model + built-in-credentials path works.
+  const result = await zapier.runAction({
+    app: action.appKey,
+    actionType: action.actionType,
+    action: action.actionKey,
+    inputs,
   });
 
   const record = (result.data?.[0] ?? {}) as Record<string, unknown>;

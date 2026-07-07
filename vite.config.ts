@@ -12,4 +12,27 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    server: {
+      port: 3333,
+    },
+    // @zapier/zapier-sdk-cli is a dev-only login helper: the runtime SDK
+    // dynamically imports it (`@zapier/zapier-sdk-cli/login`) only to auto-detect
+    // local CLI credentials, and it pulls in a native keyring binary that can't
+    // be bundled. Production authenticates via ZAPIER_CREDENTIALS instead and
+    // never hits that path, so keep the CLI and its native keychain deps out of
+    // the build entirely.
+    ssr: {
+      external: ["@zapier/zapier-sdk-cli", "cross-keychain", "@napi-rs/keyring"],
+    },
+    build: {
+      rollupOptions: {
+        external: [
+          /^@zapier\/zapier-sdk-cli(\/.*)?$/,
+          /^cross-keychain(\/.*)?$/,
+          /^@napi-rs\/keyring/,
+        ],
+      },
+    },
+  },
 });

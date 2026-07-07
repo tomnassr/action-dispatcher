@@ -16,6 +16,14 @@ dist-ssr
 .nitro
 *.local
 
+# This project uses Bun (bun.lock) — keep stray npm/yarn/pnpm lockfiles out
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Local agent tooling / editor settings
+.claude/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars

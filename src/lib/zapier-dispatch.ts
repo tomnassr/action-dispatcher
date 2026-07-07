@@ -8,12 +8,16 @@ import { createServerFn } from "@tanstack/react-start";
 import * as core from "@/lib/action-dispatcher";
 
 export type {
+  SdkStatus,
   ConnectedApp,
+  ConnectedAccount,
   ActionParam,
   ProposedAction,
   ExecutionResult,
   ZapierAppSummary,
   ZapierConnectStart,
+  AppAnalysisResult,
+  AnalysisTarget,
 } from "@/lib/action-dispatcher";
 
 const SAMPLE_TRANSCRIPT = `[00:02] Jamie (Acme): Thanks for jumping on, Priya. Quick recap — we've been evaluating three vendors for the Q3 migration and honestly, your platform is the front-runner.
@@ -27,10 +31,26 @@ const SAMPLE_TRANSCRIPT = `[00:02] Jamie (Acme): Thanks for jumping on, Priya. Q
 
 export const SAMPLE_TRANSCRIPT_TEXT = SAMPLE_TRANSCRIPT;
 
+const getSdkStatusFn = createServerFn({ method: "GET" }).handler(core.getSdkStatus);
+
+/** Whether the Zapier SDK is authenticated (and as whom). Drives whether the
+ * app shows setup instructions or the app UI. */
+export async function getSdkStatus(): Promise<core.SdkStatus> {
+  return getSdkStatusFn();
+}
+
 const getConnectionsFn = createServerFn({ method: "GET" }).handler(core.getConnections);
 
 export async function getConnections(): Promise<core.ConnectedApp[]> {
   return getConnectionsFn();
+}
+
+const getConnectedAccountsFn = createServerFn({ method: "GET" }).handler(core.getConnectedAccounts);
+
+/** Every authorized connection as its own account — the prioritize page uses
+ * this to let the user pick which account each app runs as. */
+export async function getConnectedAccounts(): Promise<core.ConnectedAccount[]> {
+  return getConnectedAccountsFn();
 }
 
 const searchZapierAppsFn = createServerFn({ method: "POST" })
@@ -71,17 +91,47 @@ export async function pollZapierConnect(
   return pollZapierConnectFn({ data: { appKey, startedAt } });
 }
 
-const analyzeTranscriptFn = createServerFn({ method: "POST" })
-  .validator((transcript: unknown): string => {
-    if (typeof transcript !== "string" || !transcript.trim()) {
+const analyzeTranscriptStreamFn = createServerFn({ method: "POST" })
+  .validator((input: unknown): { transcript: string; targets: core.AnalysisTarget[] } => {
+    const value = input as { transcript?: unknown; targets?: unknown };
+    if (typeof value.transcript !== "string" || !value.transcript.trim()) {
       throw new Error("transcript must be a non-empty string");
     }
-    return transcript;
+    if (!Array.isArray(value.targets) || value.targets.length === 0) {
+      throw new Error("select at least one app and account to analyze");
+    }
+    const targets = value.targets.map((t): core.AnalysisTarget => {
+      const target = t as Partial<core.AnalysisTarget>;
+      if (
+        typeof target.appKey !== "string" ||
+        typeof target.connectionId !== "string" ||
+        !target.appKey ||
+        !target.connectionId
+      ) {
+        throw new Error("each target needs an appKey and connectionId");
+      }
+      return {
+        appKey: target.appKey,
+        connectionId: target.connectionId,
+        appName: typeof target.appName === "string" ? target.appName : target.appKey,
+        accountLabel: typeof target.accountLabel === "string" ? target.accountLabel : target.appKey,
+      };
+    });
+    return { transcript: value.transcript, targets };
   })
-  .handler(({ data }) => core.analyzeTranscript(data));
+  .handler(({ data }) => core.analyzeTranscriptStream(data));
 
-export async function analyzeTranscript(transcript: string): Promise<core.ProposedAction[]> {
-  return analyzeTranscriptFn({ data: transcript });
+/**
+ * Streams per-target analysis results as each app/account's extraction settles.
+ * Returns an async iterable the caller consumes with `for await` in completion
+ * order — TanStack Start's server-function transport delivers the server-side
+ * async generator to the client as an async iterable.
+ */
+export async function analyzeTranscriptStream(
+  transcript: string,
+  targets: core.AnalysisTarget[],
+): Promise<AsyncIterable<core.AppAnalysisResult>> {
+  return analyzeTranscriptStreamFn({ data: { transcript, targets } });
 }
 
 const executeActionsFn = createServerFn({ method: "POST" })

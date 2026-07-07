@@ -92,11 +92,31 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Dispatch — Turn transcripts into actions" },
-      { name: "description", content: "Paste a call transcript, review AI-extracted actions across your connected apps, and fire them off." },
-      { property: "og:description", content: "Paste a call transcript, review AI-extracted actions across your connected apps, and fire them off." },
-      { name: "twitter:description", content: "Paste a call transcript, review AI-extracted actions across your connected apps, and fire them off." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/eea4d873-d095-4ba9-9b77-a10f3e7a09a3/id-preview-d5d2efeb--e1f61102-ba6a-48b0-919c-17ee3b707486.lovable.app-1783107893495.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/eea4d873-d095-4ba9-9b77-a10f3e7a09a3/id-preview-d5d2efeb--e1f61102-ba6a-48b0-919c-17ee3b707486.lovable.app-1783107893495.png" },
+      {
+        name: "description",
+        content:
+          "Paste a call transcript, review AI-extracted actions across your connected apps, and fire them off.",
+      },
+      {
+        property: "og:description",
+        content:
+          "Paste a call transcript, review AI-extracted actions across your connected apps, and fire them off.",
+      },
+      {
+        name: "twitter:description",
+        content:
+          "Paste a call transcript, review AI-extracted actions across your connected apps, and fire them off.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/eea4d873-d095-4ba9-9b77-a10f3e7a09a3/id-preview-d5d2efeb--e1f61102-ba6a-48b0-919c-17ee3b707486.lovable.app-1783107893495.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/eea4d873-d095-4ba9-9b77-a10f3e7a09a3/id-preview-d5d2efeb--e1f61102-ba6a-48b0-919c-17ee3b707486.lovable.app-1783107893495.png",
+      },
     ],
     links: [
       {

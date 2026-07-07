@@ -12,3 +12,10 @@ ZAPIER_CREDENTIALS=
 # authorize each app. Optional — if unset, the app falls back to the most
 # recently created connection per app.
 ZAPIER_CONNECTION_IDS=
+
+# AI by Zapier model used for transcript analysis. Optional — defaults to a
+# free, plan-included Gemini model (google/gemini-2.5-flash) that runs on
+# Zapier's built-in credentials, so it only consumes a Zapier task and needs
+# no connected AI provider account. Override to use a different model, e.g.
+# google/gemini-2.5-pro or a provider you've connected your own key for.
+ZAPIER_AI_MODEL=
